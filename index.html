@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solis BLE Full Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+            max-width: 500px;
+            margin: auto;
+        }
+
+        h1 {
+            color: #e94560;
+            text-align: center;
+            font-size: 20px;
+        }
+
+        .group {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            margin: 8px 0 3px;
+            color: #aaa;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            background: #0f3460;
+            color: #fff;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-connect {
+            background: #3498db;
+        }
+
+        .btn-save {
+            background: #e94560;
+        }
+
+        .btn-on {
+            background: #27ae60;
+            flex: 1;
+        }
+
+        .btn-off {
+            background: #e74c3c;
+            flex: 1;
+        }
+
+        .flex-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .status-text {
+            text-align: center;
+            color: #00ffc6;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>⚙️ Solis BLE Modbus Dashboard</h1>
+
+    <button id="connectBtn" class="btn btn-connect" onclick="connectBLE()">🔗 Kết nối Thiết bị</button>
+    <div id="status" class="status-text">Chưa kết nối Bluetooth</div>
+
+    <div class="group">
+        <h3>Điều khiển nhanh</h3>
+        <div class="flex-row" style="margin-top:10px;">
+            <button class="btn btn-on" onclick="sendRawCmd('on')">BẬT (ON)</button>
+            <button class="btn btn-off" onclick="sendRawCmd('off')">TẮT (OFF)</button>
+        </div>
+        <p style="margin-top: 10px; text-align: center;">Giá trị hiện tại: <span id="cur_val"
+                style="font-weight:bold; color:#fff;">--</span></p>
+    </div>
+
+    <div class="group">
+        <h3>Cấu hình hệ thống Modbus</h3>
+
+        <label>Slave ID</label>
+        <input type="number" id="slave_id" min="1" max="247">
+
+        <label>Register Address (Write)</label>
+        <input type="number" id="reg_addr">
+
+        <label>HealthCheck Reg (Read)</label>
+        <input type="number" id="health_reg">
+
+        <label>Value 1 (ON)</label>
+        <input type="number" id="value_on">
+
+        <label>Value 2 (OFF)</label>
+        <input type="number" id="value_off">
+
+        <button class="btn btn-save" onclick="saveConfigBLE()">💾 Lưu cấu hình qua Bluetooth</button>
+    </div>
+
+    <script>
+        const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const RX_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+        const TX_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+        let bleDevice = null;
+        let rxCharacteristic = null;
+
+        async function connectBLE() {
+            try {
+                document.getElementById('status').innerText = "Đang quét tìm thiết bị...";
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'Solis-EPM-Bluetooth' }],
+                    optionalServices: [NUS_SERVICE_UUID]
+                });
+
+                const server = await bleDevice.gatt.connect();
+                const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+
+                rxCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC_UUID);
+                const txCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC_UUID);
+
+                await txCharacteristic.startNotifications();
+                txCharacteristic.addEventListener('characteristicvaluechanged', handleIncomingData);
+
+                document.getElementById('connectBtn').innerText = "✅ Thiết bị đã liên kết";
+                document.getElementById('status').innerText = "Đã đồng bộ dữ liệu!";
+            } catch (error) {
+                document.getElementById('status').innerText = "Lỗi kết nối!";
+                console.error(error);
+            }
+        }
+
+        // Xử lý dữ liệu ESP32 đổ lên -> Đổ dữ liệu vào các ô Input
+        function handleIncomingData(event) {
+            let enc = new TextDecoder("utf-8");
+            let rawStr = enc.decode(event.target.value);
+            console.log("Nhận từ ESP32:", rawStr);
+
+            try {
+                let data = JSON.parse(rawStr);
+                if (data.type === "sync") {
+                    // Điền tự động vào form cấu hình
+                    document.getElementById('slave_id').value = data.slave_id;
+                    document.getElementById('reg_addr').value = data.reg_addr;
+                    document.getElementById('health_reg').value = data.health_reg;
+                    document.getElementById('value_on').value = data.value_on;
+                    document.getElementById('value_off').value = data.value_off;
+
+                    // Cập nhật trạng thái trị vận hành
+                    document.getElementById('cur_val').innerText = data.cur_val;
+                    document.getElementById('status').innerText = data.connected ? "Modbus kết nối OK" : "MẤT KẾT NỐI MODBUS";
+                }
+            } catch (e) {
+                console.log("Dữ liệu nhận được không phải JSON cấu hình:", rawStr);
+            }
+        }
+
+        // Hàm gửi lệnh Text điều khiển nhanh (on/off)
+        async function sendRawCmd(text) {
+            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
+            let enc = new TextEncoder();
+            await rxCharacteristic.writeValue(enc.encode(text));
+        }
+
+        // Hàm thu thập form và đóng gói JSON gửi ngược lại ESP32 để lưu
+        async function saveConfigBLE() {
+            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
+
+            let configPayload = {
+                type: "save",
+                slave_id: parseInt(document.getElementById('slave_id').value),
+                reg_addr: parseInt(document.getElementById('reg_addr').value),
+                health_reg: parseInt(document.getElementById('health_reg').value),
+                value_on: parseInt(document.getElementById('value_on').value),
+                value_off: parseInt(document.getElementById('value_off').value)
+            };
+
+            let jsonString = JSON.stringify(configPayload);
+            console.log("Gửi cấu hình mới:", jsonString);
+
+            let enc = new TextEncoder();
+            document.getElementById('status').innerText = "Đang gửi cấu hình mới...";
+            await rxCharacteristic.writeValue(enc.encode(jsonString));
+        }
+    </script>
+</body>
+
+</html>
