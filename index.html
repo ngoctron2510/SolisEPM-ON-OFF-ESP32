@@ -271,7 +271,18 @@
         </div>
 
         <div class="card">
-            <div class="card-title">🔧 Cấu hình hệ thống Modbus</div>
+            <div class="card-title">� WiFi Configuration</div>
+            <div id="wifiStatus" style="font-size:12px;padding:6px 10px;border-radius:6px;text-align:center;margin-bottom:10px;background:rgba(255,255,255,0.05);color:var(--text-muted)">Chưa kết nối WiFi</div>
+            <label>WiFi SSID</label>
+            <input type="text" id="wifi_ssid" placeholder="Tên WiFi">
+            <label>WiFi Password</label>
+            <input type="password" id="wifi_password" placeholder="Mật khẩu">
+            <button class="btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 15px rgba(245,158,11,0.3)" onclick="sendWifiBLE()">📶 Gửi WiFi cho ESP32</button>
+            <div id="wifiResult" style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:6px;min-height:18px"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">�🔧 Cấu hình hệ thống Modbus</div>
 
             <label>Slave ID</label>
             <input type="number" id="slave_id" min="1" max="247">
@@ -333,7 +344,7 @@
             try {
                 document.getElementById('status').innerText = "Đang quét tìm thiết bị...";
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'Solis-EPM-Bluetooth' }],
+                    filters: [{ name: 'SolisEPM' }],
                     optionalServices: [NUS_SERVICE_UUID]
                 });
 
@@ -419,6 +430,19 @@
                     try {
                         let data = JSON.parse(msg);
                         // ---- Sync config (Modbus + Button) ----
+                        if (data.type === "wifi") {
+                            const ws=document.getElementById('wifiStatus');
+                            const wr=document.getElementById('wifiResult');
+                            if(data.ok){
+                                ws.innerHTML='<b style=color:#10b981>✓ Da ket noi!</b> IP: '+data.ip;
+                                ws.style.background='rgba(16,185,129,0.15)';
+                                wr.innerText='WiFi OK! IP: '+data.ip;
+                            }else{
+                                ws.innerHTML='<b style=color:#ef4444>✗ That bai</b>';
+                                ws.style.background='rgba(239,68,68,0.15)';
+                                wr.innerText='Ket noi WiFi that bai!';
+                            }
+                        }
                         if (data.type === "sync") {
                             document.getElementById('slave_id').value = data.slave_id;
                             document.getElementById('reg_addr').value = data.reg_addr;
@@ -473,6 +497,15 @@
                 document.getElementById('timeSyncStatus').style.color = "var(--red)";
                 console.error(error);
             }
+        }
+
+        async function sendWifiBLE() {
+            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
+            const ssid=document.getElementById('wifi_ssid').value.trim();
+            if(!ssid) return alert('Nhap WiFi SSID!');
+            const pw=document.getElementById('wifi_password').value;
+            document.getElementById('wifiResult').innerText='Dang gui WiFi...';
+            await sendBLEMessage(JSON.stringify({type:"wifi",ssid:ssid,password:pw}));
         }
 
         async function saveConfigBLE() {
