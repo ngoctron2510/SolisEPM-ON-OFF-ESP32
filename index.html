@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solis BLE Full Dashboard</title>
+    <title>Solis BLE + WiFi Dashboard</title>
     <!-- Import Google Font Outfit -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -244,6 +244,44 @@
         <button id="connectBtn" class="btn btn-connect" onclick="connectBLE()">🔗 Kết nối Bluetooth</button>
         <div id="status" class="status-text">Chưa kết nối Bluetooth</div>
 
+        <!-- ===== WiFi Settings Card (STA mode) ===== -->
+        <div class="card">
+            <div class="card-title">📶 Cài đặt WiFi (STA mode)</div>
+
+            <label>Quét mạng WiFi</label>
+            <button id="scanWifiBtn" class="btn" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);box-shadow:0 4px 12px rgba(37,99,235,0.3);margin-bottom:14px;" onclick="scanWifi()">📡 Quét WiFi</button>
+
+            <label>Chọn / Nhập SSID</label>
+            <select id="wifi_ssid" style="width:100%;padding:12px 14px;border:1px solid var(--card-border);border-radius:10px;background:rgba(10,15,30,0.8);color:#fff;font-size:14px;font-family:inherit;margin-bottom:14px;outline:none;" onfocus="this.size=6" onblur="this.size=1" onchange="document.getElementById('wifi_ssid_input').value=this.value">
+                <option value="">-- Chọn mạng --</option>
+            </select>
+            <input type="text" id="wifi_ssid_input" placeholder="Hoặc nhập SSID thủ công" style="margin-bottom:6px;">
+
+            <label>Mật khẩu WiFi</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="password" id="wifi_password" placeholder="Nhập mật khẩu WiFi" style="margin-bottom:0;flex:1;">
+                <button class="btn" style="width:48px;height:46px;padding:0;border-radius:10px;background:rgba(255,255,255,0.1);font-size:18px;" onclick="togglePwd()">👁️</button>
+            </div>
+
+            <button id="connectWifiBtn" class="btn" style="background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 15px rgba(5,150,105,0.3);margin-top:16px;" onclick="connectWifi()">🌐 Kết nối WiFi</button>
+
+            <div id="wifiStatus" class="status-text" style="margin-top:12px;min-height:20px;font-size:13px;"></div>
+
+            <div id="wifiInfo" style="display:none;margin-top:12px;padding:14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <span style="font-size:18px;">✅</span>
+                    <span style="font-weight:600;color:var(--green);">Đã kết nối WiFi</span>
+                </div>
+                <div style="font-size:13px;color:var(--text-muted);">Địa chỉ IP:</div>
+                <div id="wifiIp" style="font-size:20px;font-weight:700;color:var(--accent);margin:4px 0 10px;">--</div>
+                <a id="webLink" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+                    🌐 Mở giao diện Web
+                </a>
+                <button class="btn" style="background:rgba(239,68,68,0.2);color:var(--red);margin-top:10px;" onclick="disconnectWifi()">🔌 Ngắt kết nối WiFi</button>
+            </div>
+        </div>
+        <!-- ===== End WiFi Settings ===== -->
+
         <div class="card">
             <div class="card-title">🕹️ Điều khiển nhanh</div>
             <div class="flex-row">
@@ -335,13 +373,86 @@
                         console.error("Tự động đồng bộ thời gian thất bại:", e);
                     }
                 }, 1000);
+
+                // --- TỰ ĐỘNG YÊU CẦU TRẠNG THÁI WIFI KHI KẾT NỐI ---
+                setTimeout(async () => {
+                    try {
+                        let wifiReq = JSON.stringify({ type: "wifi_status" });
+                        await rxCharacteristic.writeValue(new TextEncoder().encode(wifiReq));
+                    } catch (e) { /* silent */ }
+                }, 2000);
             } catch (error) {
                 document.getElementById('status').innerText = "Lỗi kết nối!";
                 console.error(error);
             }
         }
 
-        // Xử lý dữ liệu ESP32 đổ lên -> Đổ dữ liệu vào các ô Input
+        // ========== Hàm WiFi ==========
+
+        async function scanWifi() {
+            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
+            const btn = document.getElementById('scanWifiBtn');
+            const orig = btn.innerText;
+            btn.innerText = "⏳ Đang quét...";
+            btn.disabled = true;
+            try {
+                let payload = JSON.stringify({ type: "wifi_scan" });
+                await rxCharacteristic.writeValue(new TextEncoder().encode(payload));
+                document.getElementById('wifiStatus').innerText = "Đã gửi yêu cầu quét, chờ kết quả...";
+            } catch (e) {
+                document.getElementById('wifiStatus').innerText = "Lỗi gửi lệnh quét!";
+                console.error(e);
+            }
+            btn.innerText = orig;
+            btn.disabled = false;
+        }
+
+        async function connectWifi() {
+            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
+            const ssid = document.getElementById('wifi_ssid_input').value.trim() || 
+                         document.getElementById('wifi_ssid').value;
+            const password = document.getElementById('wifi_password').value;
+            if (!ssid) return alert("Vui lòng nhập hoặc chọn SSID!");
+            if (!password) return alert("Vui lòng nhập mật khẩu WiFi!");
+
+            const statusDiv = document.getElementById('wifiStatus');
+            statusDiv.innerText = "⏳ Đang kết nối WiFi...";
+            document.getElementById('connectWifiBtn').disabled = true;
+
+            try {
+                let payload = JSON.stringify({
+                    type: "wifi_connect",
+                    ssid: ssid,
+                    password: password
+                });
+                await rxCharacteristic.writeValue(new TextEncoder().encode(payload));
+            } catch (e) {
+                statusDiv.innerText = "✗ Lỗi gửi lệnh!";
+                console.error(e);
+            }
+            document.getElementById('connectWifiBtn').disabled = false;
+        }
+
+        async function disconnectWifi() {
+            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
+            try {
+                let payload = JSON.stringify({ type: "wifi_disconnect" });
+                await rxCharacteristic.writeValue(new TextEncoder().encode(payload));
+                document.getElementById('wifiStatus').innerText = "🔌 Đã ngắt kết nối WiFi";
+                document.getElementById('wifiInfo').style.display = "none";
+                document.getElementById('wifiStatus').style.color = "";
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function togglePwd() {
+            const pwd = document.getElementById('wifi_password');
+            pwd.type = pwd.type === 'password' ? 'text' : 'password';
+        }
+
+        // ========== Xử lý dữ liệu từ ESP32 ==========
+
         function handleIncomingData(event) {
             let enc = new TextDecoder("utf-8");
             let rawStr = enc.decode(event.target.value);
@@ -349,15 +460,87 @@
 
             try {
                 let data = JSON.parse(rawStr);
+                const wifiStatus = document.getElementById('wifiStatus');
+
+                // ---- WiFi scan results ----
+                if (data.type === "wifi_scan_results") {
+                    const select = document.getElementById('wifi_ssid');
+                    select.innerHTML = '<option value="">-- Chọn mạng --</option>';
+                    const networks = data.networks || [];
+                    if (networks.length === 0) {
+                        wifiStatus.innerText = "⚠️ Không tìm thấy mạng WiFi nào";
+                    } else {
+                        // Loại bỏ trùng SSID, giữ lại mạnh nhất
+                        const unique = new Map();
+                        networks.forEach(n => {
+                            const existing = unique.get(n.ssid);
+                            if (!existing || n.rssi > existing.rssi) unique.set(n.ssid, n);
+                        });
+                        const sorted = [...unique.values()].sort((a, b) => b.rssi - a.rssi);
+                        sorted.forEach(n => {
+                            const opt = document.createElement('option');
+                            opt.value = n.ssid;
+                            const bars = n.rssi > -60 ? '📶' : n.rssi > -75 ? '📶' : '📶';
+                            opt.textContent = `${bars} ${n.ssid} (${n.rssi}dBm)`;
+                            select.appendChild(opt);
+                        });
+                        wifiStatus.innerText = `✅ Tìm thấy ${sorted.length} mạng WiFi`;
+                        wifiStatus.style.color = "var(--green)";
+                    }
+                    return;
+                }
+
+                // ---- WiFi connect result ----
+                if (data.type === "wifi_connected") {
+                    const ip = data.ip || "Không có IP";
+                    document.getElementById('wifiIp').innerText = ip;
+                    document.getElementById('wifiInfo').style.display = "block";
+                    const link = document.getElementById('webLink');
+                    link.href = `http://${ip}`;
+                    wifiStatus.innerText = "✅ Kết nối WiFi thành công!";
+                    wifiStatus.style.color = "var(--green)";
+                    return;
+                }
+
+                // ---- WiFi disconnect / error ----
+                if (data.type === "wifi_error") {
+                    wifiStatus.innerText = "✗ " + (data.message || "Lỗi kết nối WiFi");
+                    wifiStatus.style.color = "var(--red)";
+                    document.getElementById('wifiInfo').style.display = "none";
+                    return;
+                }
+
+                if (data.type === "wifi_disconnected") {
+                    wifiStatus.innerText = "🔌 Đã ngắt kết nối WiFi";
+                    wifiStatus.style.color = "";
+                    document.getElementById('wifiInfo').style.display = "none";
+                    return;
+                }
+
+                // ---- WiFi current status (when polling) ----
+                if (data.type === "wifi_status") {
+                    if (data.connected && data.ip) {
+                        document.getElementById('wifiIp').innerText = data.ip;
+                        document.getElementById('wifiInfo').style.display = "block";
+                        const link = document.getElementById('webLink');
+                        link.href = `http://${data.ip}`;
+                        wifiStatus.innerText = "✅ Đã kết nối " + (data.ssid || "");
+                        wifiStatus.style.color = "var(--green)";
+                    } else {
+                        document.getElementById('wifiInfo').style.display = "none";
+                        wifiStatus.innerText = "⚠️ Chưa kết nối WiFi";
+                        wifiStatus.style.color = "";
+                    }
+                    return;
+                }
+
+                // ---- Sync config (Modbus) ----
                 if (data.type === "sync") {
-                    // Điền tự động vào form cấu hình
                     document.getElementById('slave_id').value = data.slave_id;
                     document.getElementById('reg_addr').value = data.reg_addr;
                     document.getElementById('health_reg').value = data.health_reg;
                     document.getElementById('value_on').value = data.value_on;
                     document.getElementById('value_off').value = data.value_off;
-
-                    // Cập nhật trạng thái trị vận hành
                     document.getElementById('cur_val').innerText = data.cur_val;
                     
                     const modbusStatus = document.getElementById('modbusStatus');
@@ -369,9 +552,10 @@
                         modbusStatus.innerText = "MẤT KẾT NỐI MODBUS";
                         modbusStatus.className = "status-badge badge-fail";
                     }
+                    return;
                 }
             } catch (e) {
-                console.log("Dữ liệu nhận được không phải JSON cấu hình:", rawStr);
+                console.log("Dữ liệu nhận được không phải JSON:", rawStr);
             }
         }
 
