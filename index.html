@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solis BLE + WiFi Dashboard</title>
-    <!-- Import Google Font Outfit -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -102,7 +101,7 @@
             letter-spacing: 0.5px;
         }
 
-        input {
+        input, select {
             width: 100%;
             padding: 12px 14px;
             border: 1px solid var(--card-border);
@@ -116,9 +115,14 @@
             transition: all 0.2s ease;
         }
 
-        input:focus {
+        input:focus, select:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        select option {
+            background: #0b0f19;
+            color: #fff;
         }
 
         .btn {
@@ -244,7 +248,6 @@
         <button id="connectBtn" class="btn btn-connect" onclick="connectBLE()">🔗 Kết nối Bluetooth</button>
         <div id="status" class="status-text">Chưa kết nối Bluetooth</div>
 
-        <!-- ===== WiFi Settings Card (STA mode) ===== -->
         <div class="card">
             <div class="card-title">📶 Cài đặt WiFi (STA mode)</div>
 
@@ -252,7 +255,7 @@
             <button id="scanWifiBtn" class="btn" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);box-shadow:0 4px 12px rgba(37,99,235,0.3);margin-bottom:14px;" onclick="scanWifi()">📡 Quét WiFi</button>
 
             <label>Chọn / Nhập SSID</label>
-            <select id="wifi_ssid" style="width:100%;padding:12px 14px;border:1px solid var(--card-border);border-radius:10px;background:rgba(10,15,30,0.8);color:#fff;font-size:14px;font-family:inherit;margin-bottom:14px;outline:none;" onfocus="this.size=6" onblur="this.size=1" onchange="document.getElementById('wifi_ssid_input').value=this.value">
+            <select id="wifi_ssid">
                 <option value="">-- Chọn mạng --</option>
             </select>
             <input type="text" id="wifi_ssid_input" placeholder="Hoặc nhập SSID thủ công" style="margin-bottom:6px;">
@@ -280,8 +283,6 @@
                 <button class="btn" style="background:rgba(239,68,68,0.2);color:var(--red);margin-top:10px;" onclick="disconnectWifi()">🔌 Ngắt kết nối WiFi</button>
             </div>
         </div>
-        <!-- ===== End WiFi Settings ===== -->
-
         <div class="card">
             <div class="card-title">🕹️ Điều khiển nhanh</div>
             <div class="flex-row">
@@ -331,6 +332,11 @@
         let bleDevice = null;
         let rxCharacteristic = null;
 
+        // Xử lý logic gán sự kiện thay đổi lựa chọn WiFi an toàn
+        document.getElementById('wifi_ssid').addEventListener('change', function() {
+            document.getElementById('wifi_ssid_input').value = this.value;
+        });
+
         async function connectBLE() {
             try {
                 document.getElementById('status').innerText = "Đang quét tìm thiết bị...";
@@ -354,33 +360,26 @@
                 connBtn.className = "btn btn-connect connected";
                 document.getElementById('status').innerText = "Kết nối BLE thành công!";
 
-                // --- TỰ ĐỘNG ĐỒNG BỘ THỜI GIAN KHI KẾT NỐI ---
-                setTimeout(async () => {
-                    try {
-                        let epochVal = Math.floor(Date.now() / 1000);
-                        let timePayload = {
-                            type: "time",
-                            epoch: epochVal
-                        };
-                        let enc = new TextEncoder();
-                        await rxCharacteristic.writeValue(enc.encode(JSON.stringify(timePayload)));
-                        document.getElementById('timeSyncStatus').innerText = "✓ Đã tự động đồng bộ thời gian!";
-                        document.getElementById('timeSyncStatus').style.color = "var(--green)";
-                        setTimeout(() => {
-                            document.getElementById('timeSyncStatus').innerText = "";
-                        }, 3000);
-                    } catch (e) {
-                        console.error("Tự động đồng bộ thời gian thất bại:", e);
-                    }
-                }, 1000);
+                // --- ĐỒNG BỘ THỜI GIAN VÀ CẬP NHẬT WIFI NGAY TRONG LUỒNG KẾT NỐI (User Gesture Chain) ---
+                try {
+                    let epochVal = Math.floor(Date.now() / 1000);
+                    let timePayload = { type: "time", epoch: epochVal };
+                    await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(timePayload)));
+                    
+                    document.getElementById('timeSyncStatus').innerText = "✓ Đã tự động đồng bộ thời gian!";
+                    document.getElementById('timeSyncStatus').style.color = "var(--green)";
+                    setTimeout(() => { document.getElementById('timeSyncStatus').innerText = ""; }, 3000);
+                } catch (e) {
+                    console.error("Tự động đồng bộ thời gian thất bại:", e);
+                }
 
-                // --- TỰ ĐỘNG YÊU CẦU TRẠNG THÁI WIFI KHI KẾT NỐI ---
-                setTimeout(async () => {
-                    try {
-                        let wifiReq = JSON.stringify({ type: "wifi_status" });
-                        await rxCharacteristic.writeValue(new TextEncoder().encode(wifiReq));
-                    } catch (e) { /* silent */ }
-                }, 2000);
+                try {
+                    let wifiReq = JSON.stringify({ type: "wifi_status" });
+                    await rxCharacteristic.writeValue(new TextEncoder().encode(wifiReq));
+                } catch (e) {
+                    console.error("Tự động kiểm tra trạng thái WiFi thất bại:", e);
+                }
+
             } catch (error) {
                 document.getElementById('status').innerText = "Lỗi kết nối!";
                 console.error(error);
@@ -470,7 +469,6 @@
                     if (networks.length === 0) {
                         wifiStatus.innerText = "⚠️ Không tìm thấy mạng WiFi nào";
                     } else {
-                        // Loại bỏ trùng SSID, giữ lại mạnh nhất
                         const unique = new Map();
                         networks.forEach(n => {
                             const existing = unique.get(n.ssid);
@@ -517,7 +515,7 @@
                     return;
                 }
 
-                // ---- WiFi current status (when polling) ----
+                // ---- WiFi current status ----
                 if (data.type === "wifi_status") {
                     if (data.connected && data.ip) {
                         document.getElementById('wifiIp').innerText = data.ip;
@@ -559,14 +557,12 @@
             }
         }
 
-        // Hàm gửi lệnh Text điều khiển nhanh (on/off)
         async function sendRawCmd(text) {
             if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
             let enc = new TextEncoder();
             await rxCharacteristic.writeValue(enc.encode(text));
         }
 
-        // Hàm thủ công đồng bộ thời gian qua BLE
         async function syncTimeBLE() {
             if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
             try {
@@ -575,18 +571,12 @@
                 statusDiv.style.color = "var(--text-main)";
                 
                 let epochVal = Math.floor(Date.now() / 1000);
-                let timePayload = {
-                    type: "time",
-                    epoch: epochVal
-                };
-                let enc = new TextEncoder();
-                await rxCharacteristic.writeValue(enc.encode(JSON.stringify(timePayload)));
+                let timePayload = { type: "time", epoch: epochVal };
+                await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(timePayload)));
                 
                 statusDiv.innerText = "✓ Đồng bộ thời gian thành công!";
                 statusDiv.style.color = "var(--green)";
-                setTimeout(() => {
-                    statusDiv.innerText = "";
-                }, 3000);
+                setTimeout(() => { statusDiv.innerText = ""; }, 3000);
             } catch (error) {
                 document.getElementById('timeSyncStatus').innerText = "✗ Đồng bộ thất bại!";
                 document.getElementById('timeSyncStatus').style.color = "var(--red)";
@@ -594,7 +584,6 @@
             }
         }
 
-        // Hàm thu thập form và đóng gói JSON gửi ngược lại ESP32 để lưu
         async function saveConfigBLE() {
             if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
 
@@ -608,8 +597,6 @@
             };
 
             let jsonString = JSON.stringify(configPayload);
-            console.log("Gửi cấu hình mới:", jsonString);
-
             let enc = new TextEncoder();
             document.getElementById('status').innerText = "Đang gửi cấu hình mới...";
             await rxCharacteristic.writeValue(enc.encode(jsonString));
