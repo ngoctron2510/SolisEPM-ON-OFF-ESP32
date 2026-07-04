@@ -332,6 +332,20 @@
         let bleDevice = null;
         let rxCharacteristic = null;
 
+        // Gửi dữ liệu phân mảnh qua BLE kết thúc bằng \n để không vượt quá MTU 20 bytes
+        async function sendBLEMessage(text) {
+            if (!rxCharacteristic) return;
+            const fullText = text + '\n';
+            const encoder = new TextEncoder();
+            const bytes = encoder.encode(fullText);
+            const chunkSize = 20;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.slice(i, i + chunkSize);
+                await rxCharacteristic.writeValue(chunk);
+                await new Promise(resolve => setTimeout(resolve, 15));
+            }
+        }
+
         // Xử lý logic gán sự kiện thay đổi lựa chọn WiFi an toàn
         document.getElementById('wifi_ssid').addEventListener('change', function() {
             document.getElementById('wifi_ssid_input').value = this.value;
@@ -364,7 +378,7 @@
                 try {
                     let epochVal = Math.floor(Date.now() / 1000);
                     let timePayload = { type: "time", epoch: epochVal };
-                    await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(timePayload)));
+                    await sendBLEMessage(JSON.stringify(timePayload));
                     
                     document.getElementById('timeSyncStatus').innerText = "✓ Đã tự động đồng bộ thời gian!";
                     document.getElementById('timeSyncStatus').style.color = "var(--green)";
@@ -375,7 +389,7 @@
 
                 try {
                     let wifiReq = JSON.stringify({ type: "wifi_status" });
-                    await rxCharacteristic.writeValue(new TextEncoder().encode(wifiReq));
+                    await sendBLEMessage(wifiReq);
                 } catch (e) {
                     console.error("Tự động kiểm tra trạng thái WiFi thất bại:", e);
                 }
@@ -396,7 +410,7 @@
             btn.disabled = true;
             try {
                 let payload = JSON.stringify({ type: "wifi_scan" });
-                await rxCharacteristic.writeValue(new TextEncoder().encode(payload));
+                await sendBLEMessage(payload);
                 document.getElementById('wifiStatus').innerText = "Đã gửi yêu cầu quét, chờ kết quả...";
             } catch (e) {
                 document.getElementById('wifiStatus').innerText = "Lỗi gửi lệnh quét!";
@@ -424,7 +438,7 @@
                     ssid: ssid,
                     password: password
                 });
-                await rxCharacteristic.writeValue(new TextEncoder().encode(payload));
+                await sendBLEMessage(payload);
             } catch (e) {
                 statusDiv.innerText = "✗ Lỗi gửi lệnh!";
                 console.error(e);
@@ -436,7 +450,7 @@
             if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
             try {
                 let payload = JSON.stringify({ type: "wifi_disconnect" });
-                await rxCharacteristic.writeValue(new TextEncoder().encode(payload));
+                await sendBLEMessage(payload);
                 document.getElementById('wifiStatus').innerText = "🔌 Đã ngắt kết nối WiFi";
                 document.getElementById('wifiInfo').style.display = "none";
                 document.getElementById('wifiStatus').style.color = "";
@@ -495,7 +509,7 @@
                     document.getElementById('wifiInfo').style.display = "block";
                     const link = document.getElementById('webLink');
                     link.href = `http://${ip}`;
-                    wifiStatus.innerText = "✅ Kết nối WiFi thành công!";
+                    wifiStatus.innerText = `✅ Kết nối WiFi thành công! IP: ${ip}`;
                     wifiStatus.style.color = "var(--green)";
                     return;
                 }
@@ -522,7 +536,7 @@
                         document.getElementById('wifiInfo').style.display = "block";
                         const link = document.getElementById('webLink');
                         link.href = `http://${data.ip}`;
-                        wifiStatus.innerText = "✅ Đã kết nối " + (data.ssid || "");
+                        wifiStatus.innerText = `✅ Đã kết nối ${data.ssid || ""} | IP: ${data.ip}`;
                         wifiStatus.style.color = "var(--green)";
                     } else {
                         document.getElementById('wifiInfo').style.display = "none";
@@ -559,8 +573,7 @@
 
         async function sendRawCmd(text) {
             if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
-            let enc = new TextEncoder();
-            await rxCharacteristic.writeValue(enc.encode(text));
+            await sendBLEMessage(text);
         }
 
         async function syncTimeBLE() {
@@ -572,7 +585,7 @@
                 
                 let epochVal = Math.floor(Date.now() / 1000);
                 let timePayload = { type: "time", epoch: epochVal };
-                await rxCharacteristic.writeValue(new TextEncoder().encode(JSON.stringify(timePayload)));
+                await sendBLEMessage(JSON.stringify(timePayload));
                 
                 statusDiv.innerText = "✓ Đồng bộ thời gian thành công!";
                 statusDiv.style.color = "var(--green)";
@@ -597,9 +610,8 @@
             };
 
             let jsonString = JSON.stringify(configPayload);
-            let enc = new TextEncoder();
             document.getElementById('status').innerText = "Đang gửi cấu hình mới...";
-            await rxCharacteristic.writeValue(enc.encode(jsonString));
+            await sendBLEMessage(jsonString);
             document.getElementById('status').innerText = "Đã gửi cấu hình thành công!";
         }
     </script>
