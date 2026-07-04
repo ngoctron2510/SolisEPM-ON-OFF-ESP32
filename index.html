@@ -29,7 +29,7 @@
         body {
             font-family: 'Outfit', sans-serif;
             background-color: var(--bg-color);
-            background-image: 
+            background-image:
                 radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.1) 0px, transparent 50%),
                 radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
             color: var(--text-main);
@@ -101,7 +101,8 @@
             letter-spacing: 0.5px;
         }
 
-        input, select {
+        input,
+        select {
             width: 100%;
             padding: 12px 14px;
             border: 1px solid var(--card-border);
@@ -115,7 +116,8 @@
             transition: all 0.2s ease;
         }
 
-        input:focus, select:focus {
+        input:focus,
+        select:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px var(--accent-glow);
         }
@@ -248,41 +250,7 @@
         <button id="connectBtn" class="btn btn-connect" onclick="connectBLE()">🔗 Kết nối Bluetooth</button>
         <div id="status" class="status-text">Chưa kết nối Bluetooth</div>
 
-        <div class="card">
-            <div class="card-title">📶 Cài đặt WiFi (STA mode)</div>
 
-            <label>Quét mạng WiFi</label>
-            <button id="scanWifiBtn" class="btn" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);box-shadow:0 4px 12px rgba(37,99,235,0.3);margin-bottom:14px;" onclick="scanWifi()">📡 Quét WiFi</button>
-
-            <label>Chọn / Nhập SSID</label>
-            <select id="wifi_ssid">
-                <option value="">-- Chọn mạng --</option>
-            </select>
-            <input type="text" id="wifi_ssid_input" placeholder="Hoặc nhập SSID thủ công" style="margin-bottom:6px;">
-
-            <label>Mật khẩu WiFi</label>
-            <div style="display:flex;gap:8px;align-items:center;">
-                <input type="password" id="wifi_password" placeholder="Nhập mật khẩu WiFi" style="margin-bottom:0;flex:1;">
-                <button class="btn" style="width:48px;height:46px;padding:0;border-radius:10px;background:rgba(255,255,255,0.1);font-size:18px;" onclick="togglePwd()">👁️</button>
-            </div>
-
-            <button id="connectWifiBtn" class="btn" style="background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 15px rgba(5,150,105,0.3);margin-top:16px;" onclick="connectWifi()">🌐 Kết nối WiFi</button>
-
-            <div id="wifiStatus" class="status-text" style="margin-top:12px;min-height:20px;font-size:13px;"></div>
-
-            <div id="wifiInfo" style="display:none;margin-top:12px;padding:14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                    <span style="font-size:18px;">✅</span>
-                    <span style="font-weight:600;color:var(--green);">Đã kết nối WiFi</span>
-                </div>
-                <div style="font-size:13px;color:var(--text-muted);">Địa chỉ IP:</div>
-                <div id="wifiIp" style="font-size:20px;font-weight:700;color:var(--accent);margin:4px 0 10px;">--</div>
-                <a id="webLink" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
-                    🌐 Mở giao diện Web
-                </a>
-                <button class="btn" style="background:rgba(239,68,68,0.2);color:var(--red);margin-top:10px;" onclick="disconnectWifi()">🔌 Ngắt kết nối WiFi</button>
-            </div>
-        </div>
         <div class="card">
             <div class="card-title">🕹️ Điều khiển nhanh</div>
             <div class="flex-row">
@@ -320,6 +288,21 @@
             <label>Value 2 (OFF)</label>
             <input type="number" id="value_off">
 
+            <label>Chân nút nhấn</label>
+            <select id="btn_pin"></select>
+
+            <label>Chế độ kéo (Button Mode)</label>
+            <select id="btn_mode">
+                <option value="PULL_UP">PULL_UP (nhấn = 0, thường = 1)</option>
+                <option value="PULL_DOWN">PULL_DOWN (nhấn = 1, thường = 0)</option>
+            </select>
+
+            <label>Loại nút nhấn (Button Type)</label>
+            <select id="btn_type">
+                <option value="momentary">Momentary (Nút nhấn nhả)</option>
+                <option value="toggle">Toggle (Công tắc giữ trạng thái)</option>
+            </select>
+
             <button class="btn btn-save" onclick="saveConfigBLE()">💾 Lưu cấu hình qua Bluetooth</button>
         </div>
     </div>
@@ -346,11 +329,6 @@
             }
         }
 
-        // Xử lý logic gán sự kiện thay đổi lựa chọn WiFi an toàn
-        document.getElementById('wifi_ssid').addEventListener('change', function() {
-            document.getElementById('wifi_ssid_input').value = this.value;
-        });
-
         async function connectBLE() {
             try {
                 document.getElementById('status').innerText = "Đang quét tìm thiết bị...";
@@ -374,24 +352,25 @@
                 connBtn.className = "btn btn-connect connected";
                 document.getElementById('status').innerText = "Kết nối BLE thành công!";
 
-                // --- ĐỒNG BỘ THỜI GIAN VÀ CẬP NHẬT WIFI NGAY TRONG LUỒNG KẾT NỐI (User Gesture Chain) ---
+                // --- ĐỒNG BỘ CẤU HÌNH BAN ĐẦU ---
+                try {
+                    let syncPayload = { type: "sync" };
+                    await sendBLEMessage(JSON.stringify(syncPayload));
+                } catch (e) {
+                    console.error("Yêu cầu sync ban đầu thất bại:", e);
+                }
+
+                // --- ĐỒNG BỘ THỜI GIAN NGAY TRONG LUỒNG KẾT NỐI (User Gesture Chain) ---
                 try {
                     let epochVal = Math.floor(Date.now() / 1000);
                     let timePayload = { type: "time", epoch: epochVal };
                     await sendBLEMessage(JSON.stringify(timePayload));
-                    
+
                     document.getElementById('timeSyncStatus').innerText = "✓ Đã tự động đồng bộ thời gian!";
                     document.getElementById('timeSyncStatus').style.color = "var(--green)";
                     setTimeout(() => { document.getElementById('timeSyncStatus').innerText = ""; }, 3000);
                 } catch (e) {
                     console.error("Tự động đồng bộ thời gian thất bại:", e);
-                }
-
-                try {
-                    let wifiReq = JSON.stringify({ type: "wifi_status" });
-                    await sendBLEMessage(wifiReq);
-                } catch (e) {
-                    console.error("Tự động kiểm tra trạng thái WiFi thất bại:", e);
                 }
 
             } catch (error) {
@@ -400,174 +379,73 @@
             }
         }
 
-        // ========== Hàm WiFi ==========
 
-        async function scanWifi() {
-            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
-            const btn = document.getElementById('scanWifiBtn');
-            const orig = btn.innerText;
-            btn.innerText = "⏳ Đang quét...";
-            btn.disabled = true;
-            try {
-                let payload = JSON.stringify({ type: "wifi_scan" });
-                await sendBLEMessage(payload);
-                document.getElementById('wifiStatus').innerText = "Đã gửi yêu cầu quét, chờ kết quả...";
-            } catch (e) {
-                document.getElementById('wifiStatus').innerText = "Lỗi gửi lệnh quét!";
-                console.error(e);
-            }
-            btn.innerText = orig;
-            btn.disabled = false;
-        }
-
-        async function connectWifi() {
-            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
-            const ssid = document.getElementById('wifi_ssid_input').value.trim() || 
-                         document.getElementById('wifi_ssid').value;
-            const password = document.getElementById('wifi_password').value;
-            if (!ssid) return alert("Vui lòng nhập hoặc chọn SSID!");
-            if (!password) return alert("Vui lòng nhập mật khẩu WiFi!");
-
-            const statusDiv = document.getElementById('wifiStatus');
-            statusDiv.innerText = "⏳ Đang kết nối WiFi...";
-            document.getElementById('connectWifiBtn').disabled = true;
-
-            try {
-                let payload = JSON.stringify({
-                    type: "wifi_connect",
-                    ssid: ssid,
-                    password: password
-                });
-                await sendBLEMessage(payload);
-            } catch (e) {
-                statusDiv.innerText = "✗ Lỗi gửi lệnh!";
-                console.error(e);
-            }
-            document.getElementById('connectWifiBtn').disabled = false;
-        }
-
-        async function disconnectWifi() {
-            if (!rxCharacteristic) return alert("Chưa kết nối Bluetooth!");
-            try {
-                let payload = JSON.stringify({ type: "wifi_disconnect" });
-                await sendBLEMessage(payload);
-                document.getElementById('wifiStatus').innerText = "🔌 Đã ngắt kết nối WiFi";
-                document.getElementById('wifiInfo').style.display = "none";
-                document.getElementById('wifiStatus').style.color = "";
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        function togglePwd() {
-            const pwd = document.getElementById('wifi_password');
-            pwd.type = pwd.type === 'password' ? 'text' : 'password';
-        }
 
         // ========== Xử lý dữ liệu từ ESP32 ==========
+
+        function populatePinOptions(selectedPin) {
+            const pinSelect = document.getElementById('btn_pin');
+            pinSelect.innerHTML = '';
+            const pins = [5, 12, 13, 14, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33];
+            pins.forEach(function (p) {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.innerText = 'GPIO ' + p;
+                if (p === selectedPin) {
+                    opt.selected = true;
+                }
+                pinSelect.appendChild(opt);
+            });
+        }
+
+        let ble_rx_buffer = '';
 
         function handleIncomingData(event) {
             let enc = new TextDecoder("utf-8");
             let rawStr = enc.decode(event.target.value);
-            console.log("Nhận từ ESP32:", rawStr);
+            console.log("Nhận chunk từ ESP32:", rawStr);
 
-            try {
-                let data = JSON.parse(rawStr);
-                const wifiStatus = document.getElementById('wifiStatus');
+            ble_rx_buffer += rawStr;
 
-                // ---- WiFi scan results ----
-                if (data.type === "wifi_scan_results") {
-                    const select = document.getElementById('wifi_ssid');
-                    select.innerHTML = '<option value="">-- Chọn mạng --</option>';
-                    const networks = data.networks || [];
-                    if (networks.length === 0) {
-                        wifiStatus.innerText = "⚠️ Không tìm thấy mạng WiFi nào";
-                    } else {
-                        const unique = new Map();
-                        networks.forEach(n => {
-                            const existing = unique.get(n.ssid);
-                            if (!existing || n.rssi > existing.rssi) unique.set(n.ssid, n);
-                        });
-                        const sorted = [...unique.values()].sort((a, b) => b.rssi - a.rssi);
-                        sorted.forEach(n => {
-                            const opt = document.createElement('option');
-                            opt.value = n.ssid;
-                            const bars = n.rssi > -60 ? '📶' : n.rssi > -75 ? '📶' : '📶';
-                            opt.textContent = `${bars} ${n.ssid} (${n.rssi}dBm)`;
-                            select.appendChild(opt);
-                        });
-                        wifiStatus.innerText = `✅ Tìm thấy ${sorted.length} mạng WiFi`;
-                        wifiStatus.style.color = "var(--green)";
+            if (ble_rx_buffer.indexOf('\n') !== -1) {
+                let lines = ble_rx_buffer.split('\n');
+                ble_rx_buffer = lines.pop(); // giữ phần chưa hoàn thành
+
+                for (let line of lines) {
+                    let msg = line.trim();
+                    if (!msg) continue;
+
+                    console.log("Đã ghép xong tin nhắn BLE:", msg);
+                    try {
+                        let data = JSON.parse(msg);
+                        // ---- Sync config (Modbus + Button) ----
+                        if (data.type === "sync") {
+                            document.getElementById('slave_id').value = data.slave_id;
+                            document.getElementById('reg_addr').value = data.reg_addr;
+                            document.getElementById('health_reg').value = data.health_reg;
+                            document.getElementById('value_on').value = data.value_on;
+                            document.getElementById('value_off').value = data.value_off;
+                            document.getElementById('cur_val').innerText = data.cur_val;
+
+                            // Điền cấu hình nút nhấn
+                            populatePinOptions(data.btn_pin);
+                            document.getElementById('btn_mode').value = data.btn_mode || 'PULL_UP';
+                            document.getElementById('btn_type').value = data.btn_type || 'momentary';
+
+                            const modbusStatus = document.getElementById('modbusStatus');
+                            modbusStatus.style.display = "inline-block";
+                            if (data.connected) {
+                                modbusStatus.innerText = "MODBUS OK";
+                                modbusStatus.className = "status-badge badge-ok";
+                            } else {
+                                modbusStatus.innerText = "MẤT KẾT NỐI MODBUS";
+                                modbusStatus.className = "status-badge badge-fail";
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Lỗi parse JSON BLE ghép nối:", e, msg);
                     }
-                    return;
                 }
-
-                // ---- WiFi connect result ----
-                if (data.type === "wifi_connected") {
-                    const ip = data.ip || "Không có IP";
-                    document.getElementById('wifiIp').innerText = ip;
-                    document.getElementById('wifiInfo').style.display = "block";
-                    const link = document.getElementById('webLink');
-                    link.href = `http://${ip}`;
-                    wifiStatus.innerText = `✅ Kết nối WiFi thành công! IP: ${ip}`;
-                    wifiStatus.style.color = "var(--green)";
-                    return;
-                }
-
-                // ---- WiFi disconnect / error ----
-                if (data.type === "wifi_error") {
-                    wifiStatus.innerText = "✗ " + (data.message || "Lỗi kết nối WiFi");
-                    wifiStatus.style.color = "var(--red)";
-                    document.getElementById('wifiInfo').style.display = "none";
-                    return;
-                }
-
-                if (data.type === "wifi_disconnected") {
-                    wifiStatus.innerText = "🔌 Đã ngắt kết nối WiFi";
-                    wifiStatus.style.color = "";
-                    document.getElementById('wifiInfo').style.display = "none";
-                    return;
-                }
-
-                // ---- WiFi current status ----
-                if (data.type === "wifi_status") {
-                    if (data.connected && data.ip) {
-                        document.getElementById('wifiIp').innerText = data.ip;
-                        document.getElementById('wifiInfo').style.display = "block";
-                        const link = document.getElementById('webLink');
-                        link.href = `http://${data.ip}`;
-                        wifiStatus.innerText = `✅ Đã kết nối ${data.ssid || ""} | IP: ${data.ip}`;
-                        wifiStatus.style.color = "var(--green)";
-                    } else {
-                        document.getElementById('wifiInfo').style.display = "none";
-                        wifiStatus.innerText = "⚠️ Chưa kết nối WiFi";
-                        wifiStatus.style.color = "";
-                    }
-                    return;
-                }
-
-                // ---- Sync config (Modbus) ----
-                if (data.type === "sync") {
-                    document.getElementById('slave_id').value = data.slave_id;
-                    document.getElementById('reg_addr').value = data.reg_addr;
-                    document.getElementById('health_reg').value = data.health_reg;
-                    document.getElementById('value_on').value = data.value_on;
-                    document.getElementById('value_off').value = data.value_off;
-                    document.getElementById('cur_val').innerText = data.cur_val;
-                    
-                    const modbusStatus = document.getElementById('modbusStatus');
-                    modbusStatus.style.display = "inline-block";
-                    if (data.connected) {
-                        modbusStatus.innerText = "MODBUS OK";
-                        modbusStatus.className = "status-badge badge-ok";
-                    } else {
-                        modbusStatus.innerText = "MẤT KẾT NỐI MODBUS";
-                        modbusStatus.className = "status-badge badge-fail";
-                    }
-                    return;
-                }
-            } catch (e) {
-                console.log("Dữ liệu nhận được không phải JSON:", rawStr);
             }
         }
 
@@ -582,11 +460,11 @@
                 const statusDiv = document.getElementById('timeSyncStatus');
                 statusDiv.innerText = "Đang đồng bộ...";
                 statusDiv.style.color = "var(--text-main)";
-                
+
                 let epochVal = Math.floor(Date.now() / 1000);
                 let timePayload = { type: "time", epoch: epochVal };
                 await sendBLEMessage(JSON.stringify(timePayload));
-                
+
                 statusDiv.innerText = "✓ Đồng bộ thời gian thành công!";
                 statusDiv.style.color = "var(--green)";
                 setTimeout(() => { statusDiv.innerText = ""; }, 3000);
@@ -606,7 +484,10 @@
                 reg_addr: parseInt(document.getElementById('reg_addr').value),
                 health_reg: parseInt(document.getElementById('health_reg').value),
                 value_on: parseInt(document.getElementById('value_on').value),
-                value_off: parseInt(document.getElementById('value_off').value)
+                value_off: parseInt(document.getElementById('value_off').value),
+                btn_pin: parseInt(document.getElementById('btn_pin').value),
+                btn_mode: document.getElementById('btn_mode').value,
+                btn_type: document.getElementById('btn_type').value
             };
 
             let jsonString = JSON.stringify(configPayload);
