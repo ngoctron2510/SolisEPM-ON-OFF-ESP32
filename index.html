@@ -344,7 +344,7 @@
             try {
                 document.getElementById('status').innerText = "Đang quét tìm thiết bị...";
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'SolisEPM' }],
+                    filters: [{ namePrefix: 'SolisEPM' }],
                     optionalServices: [NUS_SERVICE_UUID]
                 });
 
@@ -385,8 +385,8 @@
                 }
 
             } catch (error) {
-                document.getElementById('status').innerText = "Lỗi kết nối!";
-                console.error(error);
+                document.getElementById('status').innerText = "Lỗi kết nối! Xem console (F12)";
+                console.error("BLE connect error:", error);
             }
         }
 

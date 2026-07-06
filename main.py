@@ -8,6 +8,22 @@ time.sleep_ms(100)
 MODE=mode_pin.value()
 print(f'MODE={"BLE" if MODE else "WiFi"} GPIO18={MODE}')
 
+# ===== MAC SUFFIX (4 ky tu cuoi) =====
+MAC_SUFFIX='0000'
+try:
+    w0=network.WLAN(network.STA_IF)
+    w0.active(True)
+    m=w0.config('mac'); w0.active(False)
+    MAC_SUFFIX='%02x%02x'%(m[-2],m[-1])
+except:
+    try:
+        w0=network.WLAN(network.AP_IF)
+        w0.active(True)
+        m=w0.config('mac'); w0.active(False)
+        MAC_SUFFIX='%02x%02x'%(m[-2],m[-1])
+    except: pass
+print('MAC suffix:',MAC_SUFFIX)
+
 # ===== CAU HINH =====
 DEFAULT={"slave_id":101,"reg_addr":36508,"value_on":4400,"value_off":0,
          "btn_pin":5,"btn_mode":"PULL_UP","btn_type":"momentary","health_reg":36017,"last_value":0}
@@ -85,12 +101,15 @@ def vrf_rd(f,sid,addr):
 # MODE 0: WiFi AP + Modbus
 # ===================================================================
 if MODE==0:
+    # Giam xung dong khoi dong, tranh brownout
+    time.sleep_ms(200)
     # WiFi AP
     ap=network.WLAN(network.AP_IF)
     ap.active(True)
-    ap.config(essid='SolisEPM-Control',password='19001006',authmode=network.AUTH_WPA_WPA2_PSK,channel=6,hidden=0,max_clients=4)
+    ap.config(essid='SolisEPM-'+MAC_SUFFIX,password='19001006',authmode=network.AUTH_WPA_WPA2_PSK,channel=6,hidden=0,max_clients=4)
     ap.ifconfig(('192.168.88.1','255.255.255.0','192.168.88.1','8.8.8.8'))
-    print('AP: SolisEPM-Control | 192.168.88.1')
+    print('AP: SolisEPM-'+MAC_SUFFIX+' | 192.168.88.1')
+    time.sleep_ms(500)
     sta=network.WLAN(network.STA_IF)
     sta.active(True)
 
@@ -117,7 +136,10 @@ if MODE==0:
         sta.disconnect(); wifi_save("","")
 
     # HTML sieu nhe, day du tinh nang
-    HTML="""HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1"><title>SolisEPM</title><style>*{margin:0;padding:0;font-family:Arial,sans-serif}body{background:#1a1a2e;color:#eee;padding:16px;max-width:480px;margin:auto}h1{color:#e94560;text-align:center;font-size:20px;margin-bottom:12px}.c{background:#16213e;border-radius:8px;padding:12px;margin-bottom:10px}.c h2{font-size:14px;color:#e94560;margin-bottom:8px}.l{display:flex;align-items:center;gap:8px;font-size:14px;margin:4px 0}.d{width:12px;height:12px;border-radius:50%;display:inline-block}.d1{background:#2ecc71;box-shadow:0 0 8px #2ecc71}.d0{background:#555}.bg{border:3px solid #e94560;border-radius:10px;text-align:center;padding:10px;background:#0f3460;margin:6px 0}.bg .v{font-size:28px;font-weight:bold}.r{display:flex;gap:8px}.btn{flex:1;padding:10px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:14px;color:#fff;margin:4px 0}.b2{background:#27ae60}.b3{background:#e74c3c}.b4{background:#3498db}.lb{font-size:13px;color:#aaa;margin:6px 0 2px;display:block}.in{width:100%;padding:8px;border:none;border-radius:5px;background:#0f3460;color:#fff;font-size:14px;outline:none;margin:2px 0}.s{text-align:center;font-size:12px;color:#666;margin-top:8px}</style></head><body><h1>Solis EPM</h1><div class=c><h2>Trang thai</h2><div class=l><span class=d id=d1></span>LED ON: <b id=t1>--</b></div><div class=l><span class=d id=d2></span>LED OFF: <b id=t2>--</b></div><div class=bg><div class=v id=sv>--</div></div><div id=cs style="font-size:12px;padding:4px;border-radius:4px;text-align:center;margin:4px 0"></div></div><div class=c><h2>Dieu khien</h2><div class=r><button class="btn b2" onclick="c(1)">BAT</button><button class="btn b3" onclick="c(0)">TAT</button></div><div id=tr style="font-size:13px;color:#aaa;text-align:center;min-height:18px"></div></div><div class=c><h2>WiFi</h2><div id=ws style="font-size:12px;padding:4px;border-radius:4px;text-align:center;margin-bottom:6px"></div><button class="btn b4" onclick=wq()>Quet</button><div id=wl style="display:none;margin-top:6px"><select id=wsid class=in></select><input class=in id=wpw placeholder="Mat khau"><div class=r><button class="btn b2" onclick=wc()>Ket noi</button><button class="btn b3" onclick=wf()>Quen</button></div><div id=wr style="font-size:12px;color:#aaa;text-align:center;min-height:18px"></div></div></div><div class=c><h2>Cau hinh</h2><label class=lb>Slave ID</label><input class=in id=si value=101><label class=lb>Reg Address</label><input class=in id=ra value=36508><label class=lb>Value ON</label><input class=in id=vo value=4400><label class=lb>Value OFF</label><input class=in id=vf value=0><label class=lb>Health Reg</label><input class=in id=hr value=36017><button class="btn b2" onclick=svcf()>Luu</button><div id=sr style="font-size:12px;color:#aaa;text-align:center;min-height:18px;margin-top:4px"></div></div><div class=s>192.168.88.1 | WiFi Mode</div><script>var gp=function(u){return fetch(u).then(function(r){return r.json()})};function up(){gp('/s').then(function(d){document.getElementById('d1').className='d '+(d.l1?'d1':'d0');document.getElementById('d2').className='d '+(d.l2?'d1':'d0');document.getElementById('t1').textContent=d.l1?'ON':'OFF';document.getElementById('t2').textContent=d.l2?'ON':'OFF';var v=document.getElementById('sv');if(d.c&&d.v==d.vo){v.textContent='ON';v.style.color='#2ecc71'}else if(d.c&&d.v==d.vf){v.textContent='OFF';v.style.color='#e74c3c'}else{v.textContent='--';v.style.color='#555'}var cs=document.getElementById('cs');cs.innerHTML=d.c?'Modbus OK':'MAT KET NOI';cs.style.background=d.c?'#1e824c':'#c0392b';var w=document.getElementById('ws');if(d.wi){w.innerHTML='WiFi: '+d.ws;w.style.background='#1e824c'}else{w.innerHTML='AP mode';w.style.background='#555'}})};function c(v){document.getElementById('tr').textContent='...';gp('/c?v='+v).then(function(d){document.getElementById('tr').textContent=d.ok?'OK':'Loi';up()})};function wq(){gp('/w').then(function(d){var s=document.getElementById('wsid');s.innerHTML='';if(!d||!d.length){s.innerHTML='<option>Khong co</option>'}else{d.forEach(function(n){var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid;o.textContent+=' ('+n.rssi+'dBm)';s.appendChild(o)})};document.getElementById('wl').style.display='block';document.getElementById('wr').textContent='Tim thay '+(d?d.length:0)+' mang'})};function wc(){var s=document.getElementById('wsid').value,p=document.getElementById('wpw').value;if(!s)return;document.getElementById('wr').textContent='...';gp('/wc?s='+encodeURIComponent(s)+'&p='+encodeURIComponent(p)).then(function(d){document.getElementById('wr').textContent=d.ok?'OK!':'That bai';up()})};function wf(){gp('/wf').then(function(){document.getElementById('wr').textContent='Da xoa';document.getElementById('wl').style.display='none';up()})};function svcf(){gp('/sv?slave_id='+document.getElementById('si').value+'&reg_addr='+document.getElementById('ra').value+'&value_on='+document.getElementById('vo').value+'&value_off='+document.getElementById('vf').value+'&health_reg='+(document.getElementById('hr')?document.getElementById('hr').value:'36017')).then(function(d){document.getElementById('sr').textContent=d.ok?'Da luu!':'Loi';up()})};setInterval(up,2000);up();</script></body></html>"""
+    HTML="""HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1"><title>SolisEPM</title><style>*{margin:0;padding:0;font-family:Arial,sans-serif}body{background:#1a1a2e;color:#eee;padding:16px;max-width:480px;margin:auto}h1{color:#e94560;text-align:center;font-size:20px;margin-bottom:12px}.c{background:#16213e;border-radius:8px;padding:12px;margin-bottom:10px}.c h2{font-size:14px;color:#e94560;margin-bottom:8px}.l{display:flex;align-items:center;gap:8px;font-size:14px;margin:4px 0}.d{width:12px;height:12px;border-radius:50%;display:inline-block}.d1{background:#2ecc71;box-shadow:0 0 8px #2ecc71}.d0{background:#555}.bg{border:3px solid #e94560;border-radius:10px;text-align:center;padding:10px;background:#0f3460;margin:6px 0}.bg .v{font-size:28px;font-weight:bold}.r{display:flex;gap:8px}.btn{flex:1;padding:10px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:14px;color:#fff;margin:4px 0}.b2{background:#27ae60}.b3{background:#e74c3c}.b4{background:#3498db}.lb{font-size:13px;color:#aaa;margin:6px 0 2px;display:block}.in{width:100%;padding:8px;border:none;border-radius:5px;background:#0f3460;color:#fff;font-size:14px;outline:none;margin:2px 0}.s{text-align:center;font-size:12px;color:#666;margin-top:8px}</style></head><body><h1>Solis EPM</h1><div class=c><h2>Trang thai</h2><div class=l><span class=d id=d1></span>LED ON: <b id=t1>--</b></div><div class=l><span class=d id=d2></span>LED OFF: <b id=t2>--</b></div><div class=bg><div class=v id=sv>--</div></div><div id=cs style="font-size:12px;padding:4px;border-radius:4px;text-align:center;margin:4px 0"></div></div><div class=c><h2>Dieu khien</h2><div class=r><button class="btn b2" onclick="c(1)">BAT</button><button class="btn b3" onclick="c(0)">TAT</button></div><div id=tr style="font-size:13px;color:#aaa;text-align:center;min-height:18px"></div></div><div class=c><h2>WiFi</h2><div id=ws style="font-size:12px;padding:4px;border-radius:4px;text-align:center;margin-bottom:6px"></div><button class="btn b4" onclick=wq()>Quet</button><div id=wl style="display:none;margin-top:6px"><select id=wsid class=in></select><input class=in id=wpw placeholder="Mat khau"><div class=r><button class="btn b2" onclick=wc()>Ket noi</button><button class="btn b3" onclick=wf()>Quen</button></div><div id=wr style="font-size:12px;color:#aaa;text-align:center;min-height:18px"></div></div></div><div class=c><h2>Cau hinh</h2><label class=lb>Slave ID</label><input class=in id=si value=101><label class=lb>Reg Address</label><input class=in id=ra value=36508><label class=lb>Value ON</label><input class=in id=vo value=4400><label class=lb>Value OFF</label><input class=in id=vf value=0><label class=lb>Health Reg</label><input class=in id=hr value=36017><label class=lb>Btn Pin</label><input class=in id=bp value=5><label class=lb>Btn Mode</label><select class=in id=bm><option value=PULL_UP>PULL_UP</option><option value=PULL_DOWN>PULL_DOWN</option></select><label class=lb>Btn Type</label><select class=in id=bt><option value=momentary>momentary</option><option value=toggle>toggle</option></select><button class="btn b2" onclick=svcf()>Luu</button><div id=sr style="font-size:12px;color:#aaa;text-align:center;min-height:18px;margin-top:4px"></div></div><div class=s>192.168.88.1 | WiFi Mode</div><script>var gp=function(u){return fetch(u).then(function(r){return r.json()})};function up(){gp('/s').then(function(d){document.getElementById('d1').className='d '+(d.l1?'d1':'d0');document.getElementById('d2').className='d '+(d.l2?'d1':'d0');document.getElementById('t1').textContent=d.l1?'ON':'OFF';document.getElementById('t2').textContent=d.l2?'ON':'OFF';var v=document.getElementById('sv');if(d.c&&d.v==d.vo){v.textContent='ON';v.style.color='#2ecc71'}else if(d.c&&d.v==d.vf){v.textContent='OFF';v.style.color='#e74c3c'}else{v.textContent='--';v.style.color='#555'}var cs=document.getElementById('cs');cs.innerHTML=d.c?'Modbus OK':'MAT KET NOI';cs.style.background=d.c?'#1e824c':'#c0392b';var w=document.getElementById('ws');if(d.wi){w.innerHTML='WiFi: '+d.ws;w.style.background='#1e824c'}else{w.innerHTML='AP mode';w.style.background='#555'}var a=document.activeElement;if('si'in d&&a!=document.getElementById('si')){document.getElementById('si').value=d.si}if('ra'in d&&a!=document.getElementById('ra')){document.getElementById('ra').value=d.ra}if('vo'in d&&a!=document.getElementById('vo')){document.getElementById('vo').value=d.vo}if('vf'in d&&a!=document.getElementById('vf')){document.getElementById('vf').value=d.vf}if('hr'in d&&a!=document.getElementById('hr')){document.getElementById('hr').value=d.hr}if('bp'in d&&a!=document.getElementById('bp')){document.getElementById('bp').value=d.bp}if('bm'in d&&a!=document.getElementById('bm')){document.getElementById('bm').value=d.bm}if('bt'in d&&a!=document.getElementById('bt')){document.getElementById('bt').value=d.bt}})};function c(v){document.getElementById('tr').textContent='...';gp('/c?v='+v).then(function(d){document.getElementById('tr').textContent=d.ok?'OK':'Loi';up()})};function wq(){gp('/w').then(function(d){var s=document.getElementById('wsid');s.innerHTML='';if(!d||!d.length){s.innerHTML='<option>Khong co</option>'}else{d.forEach(function(n){var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid;o.textContent+=' ('+n.rssi+'dBm)';s.appendChild(o)})};document.getElementById('wl').style.display='block';document.getElementById('wr').textContent='Tim thay '+(d?d.length:0)+' mang'})};function wc(){var s=document.getElementById('wsid').value,p=document.getElementById('wpw').value;if(!s)return;document.getElementById('wr').textContent='...';gp('/wc?s='+encodeURIComponent(s)+'&p='+encodeURIComponent(p)).then(function(d){document.getElementById('wr').textContent=d.ok?'OK!':'That bai';up()})};function wf(){gp('/wf').then(function(){document.getElementById('wr').textContent='Da xoa';document.getElementById('wl').style.display='none';up()})};function svcf(){var e=function(i){var x=document.getElementById(i);return x?x.value:''};gp('/sv?slave_id='+e('si')+'&reg_addr='+e('ra')+'&value_on='+e('vo')+'&value_off='+e('vf')+'&health_reg='+e('hr')+'&btn_pin='+e('bp')+'&btn_mode='+e('bm')+'&btn_type='+e('bt')).then(function(d){document.getElementById('sr').textContent=d.ok?'Da luu!':'Loi';up()})};setInterval(up,2000);up();</script></body></html>"""
+    HTML=HTML.replace('<title>SolisEPM</title>','<title>SolisEPM-'+MAC_SUFFIX+'</title>')
+    HTML=HTML.replace('<h1>Solis EPM</h1>','<h1>Solis EPM-'+MAC_SUFFIX+'</h1>')
+    HTML=HTML.replace('WiFi Mode','WiFi '+MAC_SUFFIX)
 
     sock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
@@ -133,7 +155,7 @@ if MODE==0:
     dv=modbus_val; wp=True; lw=time.ticks_ms(); lh=time.ticks_ms()
     r=wait_rsp(1000)
     if vrf_wr(r,cfg['slave_id'],cfg['reg_addr'],dv):
-        cv=dv; led1.value(1 if cv==cfg['value_on'] else 0)
+        cv=dv; wp=False; led1.value(1 if cv==cfg['value_on'] else 0)
         led2.value(1 if cv==cfg['value_off'] else 0)
 
     while True:
@@ -145,26 +167,7 @@ if MODE==0:
             cl,a=sock.accept(); d=cl.recv(2048)
             if d:
                 l=d.split(b'\r\n')[0].decode()
-                if 'GET /s' in l:
-                    r=json.dumps({'l1':led1.value(),'l2':led2.value(),'v':modbus_val,'vo':cfg['value_on'],'vf':cfg['value_off'],'c':mc,'wi':sta.isconnected(),'ws':wifi_load().get('ssid','')})
-                    cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+r.encode())
-                elif 'GET /c' in l:
-                    modbus_val=cfg['value_on'] if 'v=1' in l else cfg['value_off']
-                    cfg['last_value']=modbus_val; save_cfg(cfg)
-                    uart.read(); wr_mb(cfg['slave_id'],cfg['reg_addr'],modbus_val)
-                    dv=modbus_val; wp=True; lw=now
-                    cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"ok":true}')
-                elif 'GET /w' in l:
-                    cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(wifi_scan()).encode())
-                elif 'GET /wc' in l:
-                    qs=l.split(' ')[1].split('?',1)[1] if '?' in l.split(' ')[1] else ''; p={}
-                    for x in qs.split('&'):
-                        if '=' in x: k,v=x.split('=',1); p[k]=v.replace('+',' ')
-                    ok=wifi_con(p.get('s',''),p.get('p',''))
-                    cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps({'ok':ok}).encode())
-                elif 'GET /wf' in l:
-                    wifi_dis(); cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"ok":true}')
-                elif 'GET /sv' in l:
+                if 'GET /sv' in l:
                     try:
                         qs=l.split(' ')[1].split('?',1)[1] if '?' in l.split(' ')[1] else ''; p={}
                         for x in qs.split('&'):
@@ -177,10 +180,33 @@ if MODE==0:
                         if 'btn_pin' in p: cfg['btn_pin']=int(p['btn_pin'])
                         if 'btn_mode' in p: cfg['btn_mode']=p['btn_mode']
                         if 'btn_type' in p: cfg['btn_type']=p['btn_type']
+                        # Dong bo modbus_val neu value_on/off thay doi
+                        if modbus_val not in (cfg['value_on'],cfg['value_off']):
+                            modbus_val=cfg['value_off']
+                            cfg['last_value']=modbus_val
                         save_cfg(cfg)
                         cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"ok":true}')
                     except Exception as e:
                         cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"ok":false}')
+                elif 'GET /s' in l:
+                    r=json.dumps({'l1':led1.value(),'l2':led2.value(),'v':modbus_val,'vo':cfg['value_on'],'vf':cfg['value_off'],'si':cfg['slave_id'],'ra':cfg['reg_addr'],'hr':cfg.get('health_reg',36017),'bp':cfg.get('btn_pin',5),'bm':cfg.get('btn_mode','PULL_UP'),'bt':cfg.get('btn_type','momentary'),'c':mc,'wi':sta.isconnected(),'ws':wifi_load().get('ssid','')})
+                    cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+r.encode())
+                elif 'GET /c' in l:
+                    modbus_val=cfg['value_on'] if 'v=1' in l else cfg['value_off']
+                    cfg['last_value']=modbus_val; save_cfg(cfg)
+                    uart.read(); wr_mb(cfg['slave_id'],cfg['reg_addr'],modbus_val)
+                    dv=modbus_val; wp=True; lw=now
+                    cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"ok":true}')
+                elif 'GET /wc' in l:
+                    qs=l.split(' ')[1].split('?',1)[1] if '?' in l.split(' ')[1] else ''; p={}
+                    for x in qs.split('&'):
+                        if '=' in x: k,v=x.split('=',1); p[k]=v.replace('+',' ')
+                    ok=wifi_con(p.get('s',''),p.get('p',''))
+                    cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps({'ok':ok}).encode())
+                elif 'GET /wf' in l:
+                    wifi_dis(); cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"ok":true}')
+                elif 'GET /w' in l:
+                    cl.send(b'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n'+json.dumps(wifi_scan()).encode())
                 else: cl.send(HTML.encode())
             cl.close()
         except: pass
@@ -222,7 +248,15 @@ if MODE==0:
             r=wait_rsp(300)
             if vrf_rd(r,cfg['slave_id'],cfg.get('health_reg',36017)):
                 hp=False; lh=now; fc=0
-                if not mc: mc=True; led1.value(1 if cv==cfg['value_on'] else 0); led2.value(1 if cv==cfg['value_off'] else 0)
+                if not mc:
+                    mc=True
+                    if cv is not None:
+                        led1.value(1 if cv==cfg['value_on'] else 0)
+                        led2.value(1 if cv==cfg['value_off'] else 0)
+                    else:
+                        # Gui lai gia tri cuoi cung khi ket noi phuc hoi
+                        uart.read(); wr_mb(cfg['slave_id'],cfg['reg_addr'],modbus_val)
+                        dv=modbus_val; wp=True; lw=now
             else:
                 hp=False; fc+=1
                 if fc>=200: time.sleep_ms(500); machine.reset()
@@ -233,9 +267,7 @@ if MODE==0:
 
         # LED blink
         cv2=cv if cv is not None else modbus_val
-        if not mc: li=500
-        elif cv2==cfg['value_on']: li=1000
-        else: li=200
+        li=1000 if cv2==cfg['value_on'] else (200 if cv2==cfg['value_off'] else 500)
         if time.ticks_diff(now,ll)>=li: led.value(not led.value()); ll=now
 
 # ===================================================================
@@ -243,6 +275,17 @@ if MODE==0:
 # ===================================================================
 else:
     import uasyncio as asyncio,bluetooth,aioble
+    # STA cho BLE mode: chi active khi can, tranh xung dot radio
+    sta=network.WLAN(network.STA_IF)
+    def wifi_con(ssid,pw):
+        if not ssid: return False
+        if not sta.active(): sta.active(True)
+        if sta.isconnected(): sta.disconnect(); time.sleep_ms(500)
+        sta.connect(ssid,pw)
+        for _ in range(15):
+            if sta.isconnected(): wifi_save(ssid,pw); return True
+            time.sleep_ms(1000)
+        return False
     _NUS=bluetooth.UUID("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
     _RX=bluetooth.UUID("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
     _TX=bluetooth.UUID("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
@@ -277,7 +320,7 @@ else:
         while True:
             try:
                 gc.collect()
-                async with await aioble.advertise(500000,name='SolisEPM') as conn:
+                async with await aioble.advertise(250000,name='SolisEPM-'+MAC_SUFFIX,services=[_NUS]) as conn:
                     print('BLE connected')
                     await asyncio.sleep_ms(500)
                     ble_sync()
@@ -315,6 +358,10 @@ else:
                                     save_cfg(cfg)
                                     if 'btn_pin' in j: btn=Pin(cfg['btn_pin'],Pin.IN,PIN_M.get(cfg['btn_mode'],Pin.PULL_UP))
                                     ble_sync()
+                                elif t=='wifi':
+                                    ok=wifi_con(j.get('ssid',''),j.get('password',''))
+                                    ip=sta.ifconfig()[0] if ok else ''
+                                    ble_send(json.dumps({'type':'wifi','ok':ok,'ip':ip}))
                             except: pass
             except: await asyncio.sleep_ms(500)
 
@@ -322,6 +369,10 @@ else:
         global cv,wp,dv,fc,mc,hp,lh,lw,lbs,ll,modbus_val
         uart.read(); wr_mb(cfg['slave_id'],cfg['reg_addr'],modbus_val)
         dv=modbus_val; wp=True; lw=time.ticks_ms(); lh=time.ticks_ms()
+        r=wait_rsp(1000)
+        if vrf_wr(r,cfg['slave_id'],cfg['reg_addr'],dv):
+            cv=dv; wp=False; led1.value(1 if cv==cfg['value_on'] else 0)
+            led2.value(1 if cv==cfg['value_off'] else 0)
         while True:
             await asyncio.sleep_ms(30)
             wdt.feed()
@@ -360,7 +411,14 @@ else:
                 r=wait_rsp(300)
                 if vrf_rd(r,cfg['slave_id'],cfg.get('health_reg',36017)):
                     hp=False; lh=now; fc=0
-                    if not mc: mc=True; led1.value(1 if cv==cfg['value_on'] else 0); led2.value(1 if cv==cfg['value_off'] else 0)
+                    if not mc:
+                        mc=True
+                        if cv is not None:
+                            led1.value(1 if cv==cfg['value_on'] else 0)
+                            led2.value(1 if cv==cfg['value_off'] else 0)
+                        else:
+                            uart.read(); wr_mb(cfg['slave_id'],cfg['reg_addr'],modbus_val)
+                            dv=modbus_val; wp=True; lw=now
                 else:
                     hp=False; fc+=1
                     if fc>=200: time.sleep_ms(500); machine.reset()
